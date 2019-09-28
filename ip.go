@@ -14,14 +14,6 @@ var (
 	data *geoip2.Reader
 )
 
-func init() {
-	var err error
-	data, err = geoip2.Open("GeoLite2-City.mmdb")
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-
 func Handler(w http.ResponseWriter, r *http.Request) {
 	ip := net.ParseIP(getIP(r))
 	log.Println("ip:", ip)
@@ -53,6 +45,15 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewEncoder(w).Encode(res); err != nil {
 		log.Println(err)
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+func init() {
+	var err error
+	data, err = geoip2.Open("GeoLite2-City.mmdb")
+	if err != nil {
+		log.Fatal(err)
 	}
 }
 
