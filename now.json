@@ -1,4 +1,10 @@
 {
+  "builds": [
+    {
+      "src": "*.go",
+      "use": "@now/go"
+    }
+  ],
   "routes": [
     {
       "src": "/.*",
