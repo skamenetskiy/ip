@@ -5,7 +5,7 @@ ENV GOOS=linux
 ADD ./ .
 RUN wget -O data.tar.gz https://geolite.maxmind.com/download/geoip/database/GeoLite2-City.tar.gz
 RUN tar xvzf data.tar.gz --strip=1
-RUN go build -o app.cmd -ldflags "-s -w -extldflags -static" .
+RUN go build -o app.cmd -ldflags "-s -w -extldflags -static" cmd/ip/main.go
 
 FROM scratch
 ENV GIN_MODE=release
