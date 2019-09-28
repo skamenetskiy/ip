@@ -61,7 +61,7 @@ func main() {
 }
 
 func handler(ctx *gin.Context) {
-	ip := net.ParseIP("213.87.128.191") //net.ParseIP(ctx.ClientIP())
+	ip := net.ParseIP(ctx.ClientIP())
 	city, err := data.City(ip)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, &errResponse{
