@@ -2,16 +2,17 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/oschwald/geoip2-golang"
 )
 
@@ -19,25 +20,29 @@ var (
 	data *geoip2.Reader
 )
 
-func main() {
+func init() {
 	var err error
 	data, err = geoip2.Open(getEnvString("GEOLITE2_FILE", "GeoLite2-City.mmdb"))
 	if err != nil {
 		log.Fatal(err)
 	}
-	router := gin.Default()
+}
+
+func main() {
+	//router := gin.Default()
 	srv := &http.Server{
 		Addr:         getEnvString("HTTP_ADDR", ":80"),
 		IdleTimeout:  getEnvDuration("HTTP_IDLE_TIMEOUT", 15),
 		ReadTimeout:  getEnvDuration("HTTP_READ_TIMEOUT", 15),
 		WriteTimeout: getEnvDuration("HTTP_WRITE_TIMEOUT", 15),
-		Handler:      router,
+		Handler:      http.HandlerFunc(Handler),
 	}
-	router.GET("/", handler)
+	//router.GET("/", handler)
 	tlsCert := getEnvString("TLS_CERT", "")
 	tlsKey := getEnvString("TLS_KEY", "")
 	go func() {
 		var err error
+		log.Printf("starting service on %s", srv.Addr)
 		if tlsKey != "" && tlsCert != "" {
 			err = srv.ListenAndServeTLS(tlsCert, tlsKey)
 		} else {
@@ -60,14 +65,18 @@ func main() {
 	}
 }
 
-func handler(ctx *gin.Context) {
-	ip := net.ParseIP(ctx.ClientIP())
+func Handler(w http.ResponseWriter, r *http.Request) {
+	ip := net.ParseIP(getIP(r))
+	log.Println("ip:", ip)
 	city, err := data.City(ip)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, &errResponse{
+		if err := json.NewEncoder(w).Encode(&errResponse{
 			Code: http.StatusInternalServerError,
 			Err:  err.Error(),
-		})
+		}); err != nil {
+			log.Println(err)
+		}
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	res := &okResponse{
@@ -85,13 +94,64 @@ func handler(ctx *gin.Context) {
 			Longitude: city.Location.Longitude,
 		},
 	}
-	cb := ctx.Query("callback")
-	if cb != "" {
-		ctx.JSONP(200, res)
-		return
+	//cb := r.URL.Query().Get("callback")
+	if err := json.NewEncoder(w).Encode(res); err != nil {
+		log.Println(err)
 	}
-	ctx.JSON(200, res)
 }
+
+func getIP(r *http.Request) string {
+	ip := r.Header.Get("X-Forwarded-For")
+	if ip != "" {
+		return ip
+	}
+	ip = r.Header.Get("X-Real-Ip")
+	if ip != "" {
+		return ip
+	}
+
+	ip = r.Header.Get("X-Appengine-Remote-Addr")
+	if ip != "" {
+		return ip
+	}
+	if ip, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr)); err == nil {
+		return ip
+	}
+	return ""
+}
+
+//func handler(ctx *gin.Context) {
+//	ip := net.ParseIP(ctx.ClientIP())
+//	city, err := data.City(ip)
+//	if err != nil {
+//		ctx.JSON(http.StatusInternalServerError, &errResponse{
+//			Code: http.StatusInternalServerError,
+//			Err:  err.Error(),
+//		})
+//		return
+//	}
+//	res := &okResponse{
+//		IP:       ip.String(),
+//		Timezone: city.Location.TimeZone,
+//		City: val{
+//			Name: city.City.Names["en"],
+//		},
+//		Country: val{
+//			Name:    city.Country.Names["en"],
+//			IsoCode: city.Country.IsoCode,
+//		},
+//		Location: geoPoint{
+//			Latitude:  city.Location.Latitude,
+//			Longitude: city.Location.Longitude,
+//		},
+//	}
+//	cb := ctx.Query("callback")
+//	if cb != "" {
+//		ctx.JSONP(200, res)
+//		return
+//	}
+//	ctx.JSON(200, res)
+//}
 
 type okResponse struct {
 	IP       string   `json:"ip"`
